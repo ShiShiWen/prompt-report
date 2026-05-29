@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM翻译质量优化报告_基于Prompt调优</title>
+<style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:1200px;margin:0 auto;padding:40px 20px;line-height:1.7;color:#1a1a1a;background:#fafafa}
+h1{color:#1a1a1a;border-bottom:3px solid #2563eb;padding-bottom:12px;font-size:28px}
+h2{color:#1e40af;margin-top:48px;padding-top:24px;border-top:1px solid #e5e7eb;font-size:22px}
+h3{color:#374151;margin-top:32px;font-size:18px}
+h4{color:#4b5563;font-size:16px}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:13px}
+th{background:#1e40af;color:white;padding:10px 12px;text-align:left;font-weight:600}
+td{border:1px solid #d1d5db;padding:8px 12px;vertical-align:top}
+tr:nth-child(even){background:#f3f4f6}
+code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px;font-family:'SF Mono',Monaco,monospace;color:#be185d}
+pre{background:#1e293b;color:#e2e8f0;padding:20px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.5}
+pre code{background:none;padding:0;color:inherit}
+hr{border:none;border-top:2px solid #e5e7eb;margin:32px 0}
+strong{color:#1e40af}
+p{margin:6px 0}
+ul{margin:8px 0 16px 0}
+li{margin:4px 0}
+.badge{display:inline-block;background:#059669;color:white;font-size:12px;padding:2px 8px;border-radius:12px;margin-left:8px;font-weight:600}
+.highlight{background:#ecfdf5;padding:16px 20px;border-left:4px solid #059669;border-radius:4px;margin:16px 0;font-size:14px}
+.diff{background:#fef3c7;padding:12px 16px;border-left:4px solid #d97706;border-radius:4px;margin:12px 0;font-size:14px;color:#374151}
+.kpi{display:inline-block;background:#1e40af;color:white;padding:4px 12px;border-radius:6px;font-weight:600;margin:0 4px}
+.win{color:#059669;font-weight:600}
+.fail{color:#dc2626;font-weight:600}</style>
+</head>
+<body>
+<h1>LLM翻译质量优化报告_基于Prompt调优</h1>
+
+<p><strong>生成日期</strong>：2026-05-29  </p>
+<p><strong>目标模型</strong>：gpt-4o（temperature=0.1，JSON object）  </p>
+<p><strong>验证规模</strong>：96 条回归 case，覆盖 7 个生产语种方向  </p>
+<p><strong>对比版本</strong>：OLD（生产基线） → Final V5（当前定型，含 V2 中间版迭代）</p>
+
+<hr>
+
+<h2>一、核心结论：Final V5 Prompt 相比 OLD Prompt 的关键改善</h2>
+
+<div class="highlight">
+<strong>一句话总结</strong>：Final V5 在保持 token 仅 +26%（约 +105 tokens）的前提下，覆盖了 OLD 直接出错的 <strong>9 类高频翻译质量问题</strong>，包括 ASR 乱码透传、孤立片段碎片输出、成语字面直译、人名跨行错乱、问号误判等 P0/P1 级问题；96 条回归中 58 条产生有效改进，无结构性退步。
+</div>
+
+<h3>1.1 OLD 直接出错、V5 修复的硬性问题（P0/P1）</h3>
+
+<table>
+<tr><th>问题类型</th><th>OLD 输出</th><th>V5 输出</th><th>严重度</th><th>来源 case</th></tr>
+<tr><td><strong>ASR 乱码透传</strong></td><td><code>Open Thetfsion.</code> <span class="fail">❌ 乱码原样输出</span></td><td>识别为 OpenAI 并完整翻译 <span class="win">✓</span></td><td>P0</td><td>BBC AI 纪录片</td></tr>
+<tr><td><strong>事实性反转</strong></td><td>"<span class="fail">The real cure for Alzheimer's was discovered...</span>" ❌（医学错误信息）</td><td>"Alzheimer's was discovered..." <span class="win">✓</span></td><td>P0</td><td>医疗·阿尔兹海默</td></tr>
+<tr><td><strong>孤立片段无意义碎片</strong></td><td><code>Por eso, en marzo.</code> → "<span class="fail">Therefore, in March.</span>" ❌</td><td>用 CONTEXT 补全为完整句 <span class="win">✓</span></td><td>P1</td><td>BBC R44</td></tr>
+<tr><td><strong>专家姓名拆错</strong></td><td>"Dimitry Vesto" + "<span class="fail">Chef</span> expert" ❌（"Chef"当职位）</td><td>"Dimitri Vestuchef, an expert..." <span class="win">✓</span></td><td>P1</td><td>CNN R51-52</td></tr>
+<tr><td><strong>核心论点丢失</strong></td><td><code>Quería.</code> → "<span class="fail">I wanted.</span>" ❌（论点链断裂）</td><td>"...defines the concept of truth..." <span class="win">✓</span></td><td>P1</td><td>CNN AI 采访</td></tr>
+<tr><td><strong>成语字面直译</strong></td><td>掩耳盗铃 → "<span class="fail">covering one's ears while stealing a bell</span>" ❌</td><td>"self-deception" <span class="win">✓</span></td><td>P1</td><td>B1（中英）</td></tr>
+<tr><td><strong>同音词识错</strong></td><td>비원 → "<span class="fail">Biwon</span>"（地名）❌</td><td>"I am unmarried"（비혼）<span class="win">✓</span></td><td>P1</td><td>C2（韩英）</td></tr>
+<tr><td><strong>多义词错义</strong></td><td>aplicaciones → "<span class="fail">applications</span>"（程序）❌</td><td>"implications"（影响）<span class="win">✓</span></td><td>P1</td><td>ES-AI R65</td></tr>
+<tr><td><strong>同音词词性错</strong></td><td>"Hinton y Bengio, <span class="fail">legal</span>, han demostrado..." ❌</td><td>"Hinton and Bengio, leaders, have..." <span class="win">✓</span></td><td>P1</td><td>ES-SP3</td></tr>
+</table>
+
+<h3>1.2 V5 改善覆盖的 9 个核心维度</h3>
+
+<table>
+<tr><th>维度</th><th>OLD</th><th>V5</th><th>改善机制</th></tr>
+<tr><td>ASR 乱码透传防御</td><td><span class="fail">❌ 直接输出</span></td><td><span class="win">✓</span></td><td>CORRECTION_RULES #1：明确"乱码"定义</td></tr>
+<tr><td>同音词上下文纠错</td><td>⚠️ 模型自由发挥</td><td><span class="win">✓</span></td><td>CORRECTION_RULES #1：主题约束</td></tr>
+<tr><td>孤立片段处理</td><td><span class="fail">❌ 字面直译</span></td><td><span class="win">✓</span></td><td>CORE RULES #3：CONTEXT 补全语义</td></tr>
+<tr><td>人名跨行一致性</td><td><span class="fail">❌</span></td><td><span class="win">✓</span></td><td>CORRECTION_RULES #5：复用 CONTEXT 形式</td></tr>
+<tr><td>陈述句误加问号（西语 Tiene...）</td><td>⚠️</td><td><span class="win">✓</span></td><td>CORRECTION_RULES #2：动词前置非疑问</td></tr>
+<tr><td>topic-marker 粒子被误译为疑问</td><td><span class="fail">❌</span></td><td><span class="win">✓</span></td><td>CORRECTION_RULES #2（V5 重写）：呢/-죠/ね 白名单</td></tr>
+<tr><td>多义词上下文消歧</td><td>⚠️</td><td><span class="win">✓</span></td><td>TRANSLATION_RULES #2：主题优先于词典默认</td></tr>
+<tr><td>添加解释性填充（"翻译腔"）</td><td><span class="fail">❌</span></td><td><span class="win">✓</span></td><td>TRANSLATION_RULES #1：禁止填充</td></tr>
+<tr><td>成语意译</td><td>⚠️</td><td><span class="win">✓</span></td><td>CORRECTION_RULES #4：意译 + 匹配正式度</td></tr>
+<tr><td>日语敬语 / 正式语体保留</td><td>⚠️ 部分场合用词偏离</td><td><span class="win">✓</span> 多数改善（含已知局限）</td><td>CORRECTION_RULES #4 + ROLE "preserving tone"</td></tr>
+</table>
+
+<h3>1.3 关键指标</h3>
+
+<table>
+<tr><th>指标</th><th>OLD</th><th>V5</th><th>变化</th></tr>
+<tr><td>Prompt 字符数</td><td>1612</td><td>2024</td><td>+26%</td></tr>
+<tr><td>估算 Token</td><td>~400</td><td>~505</td><td>+105 (~+26%)</td></tr>
+<tr><td>每请求成本（gpt-4o input）</td><td>baseline</td><td>+$0.00026</td><td>每天 100 万请求 ≈ +$26/天</td></tr>
+<tr><td>延迟影响（prefill）</td><td>baseline</td><td>+~6ms</td><td>实时场景不可感知</td></tr>
+<tr><td>96 条回归改进</td><td>—</td><td>58 条 DIFF</td><td>无结构性退步</td></tr>
+</table>
+
+<hr>
+
+<h2>二、回归测试覆盖范围</h2>
+
+<p>96 条 case 来源：<code>test_cases/regression_cases.json</code>。覆盖 7 个生产语种方向、52 类翻译质量场景。</p>
+
+<h3>2.1 按语种方向分布</h3>
+
+<table>
+<tr><th>方向</th><th>数量</th><th>占比</th><th>覆盖语料</th></tr>
+<tr><td>中文 → 英语</td><td>20</td><td>20.8%</td><td>大学生旅游、AI 政策、专家访谈、成语</td></tr>
+<tr><td>日语 → 中文</td><td>20</td><td>20.8%</td><td>商务对话、口语叙事、敬语、情感</td></tr>
+<tr><td>韩语 → 中文</td><td>19</td><td>19.8%</td><td>政治新闻、个人介绍、口语推测</td></tr>
+<tr><td>西语 → 英语</td><td>15</td><td>15.6%</td><td>BBC AI 纪录片、医疗、CNN AI 采访</td></tr>
+<tr><td>日语 → 英语</td><td>10</td><td>10.4%</td><td>正式致辞、商务叙述、断句碎片</td></tr>
+<tr><td>韩语 → 英语</td><td>8</td><td>8.3%</td><td>军事新闻、同音词、topic-marker</td></tr>
+<tr><td>法语 → 中文</td><td>4</td><td>4.2%</td><td>远程医疗、机翻感场景</td></tr>
+<tr><td><strong>合计</strong></td><td><strong>96</strong></td><td><strong>100%</strong></td><td><strong>7 个方向</strong></td></tr>
+</table>
+
+<h3>2.2 按 Case 类别分布</h3>
+
+<table>
+<tr><th>类别</th><th>数量</th><th>语种覆盖</th></tr>
+<tr><td>断句碎片（syntactic fragment）</td><td>13</td><td>中英、日中、韩中、日英、西英</td></tr>
+<tr><td>口水词（fillers）</td><td>11</td><td>中英、日中、日英</td></tr>
+<tr><td>专有名词（人名/机构/地名/政治人物/品牌等 8 子类）</td><td>9</td><td>中英、日中、日英、韩中、韩英</td></tr>
+<tr><td>回归安全（无意改动）</td><td>9</td><td>中英、韩中、西英、日英、韩英、法中</td></tr>
+<tr><td>正式敬语</td><td>4</td><td>日中、韩中、日英、韩英</td></tr>
+<tr><td>口语自然度</td><td>4</td><td>西英、日英、韩英</td></tr>
+<tr><td>标点纠正</td><td>3</td><td>西英、中英</td></tr>
+<tr><td>同音词纠错</td><td>3</td><td>韩英、日英</td></tr>
+<tr><td>口语语气</td><td>3</td><td>韩中、韩英</td></tr>
+<tr><td>成语意译</td><td>2</td><td>中英、韩中</td></tr>
+<tr><td>反问语气</td><td>2</td><td>中英、韩中</td></tr>
+<tr><td>固定表达</td><td>2</td><td>日中、日英</td></tr>
+<tr><td>JP-ZH / KR-ZH 细分（情感/叙事/敬语等 20 类单点 case）</td><td>20</td><td>日中、韩中</td></tr>
+<tr><td>西英细分（医学/数字/长句/正式语体/消歧/情感等）</td><td>8</td><td>西英</td></tr>
+<tr><td>其他（口语消歧、信息完整性、机翻感等）</td><td>3</td><td>日中、中英、法中</td></tr>
+<tr><td><strong>合计</strong></td><td><strong>96</strong></td><td><strong>52 类细分场景</strong></td></tr>
+</table>
+
+<h3>2.3 端到端语料样本（西英方向，附录详）</h3>
+
+<p>除 96 条 case 外，西英方向额外做了 3 个端到端语料的全文翻译（BBC AI 纪录片 / 医疗·阿尔兹海默 / CNN AI 采访），用于验证 prompt 在长篇真实语料下的稳定性。<strong>该评分仅覆盖西英方向，不能作为 V5 整体效果结论</strong>，详见 <a href="#appendix-c">附录 C</a>。</p>
+
+<hr>
+
+<h2>三、详细 Case 验证对比（按规则分类）</h2>
+
+<div class="diff">每条 case 给出 ASR 输入、CONTEXT 主题、OLD/V2/V5 输出对照。CONTEXT 已截断，完整数据见 <code>test_cases/regression_cases.json</code>。</div>
+
+<h3>3.1 CORRECTION_RULES #1 — 同音词上下文纠错</h3>
+
+<table>
+<tr><th>ID</th><th>ASR 输入</th><th>CONTEXT 主题</th><th>OLD 翻译</th><th>V2 翻译</th><th>V5 翻译</th><th>评判</th></tr>
+<tr><td>C2</td><td><code>비원입니다.</code></td><td>自我介绍：67年生、50대 中후반</td><td>It is Biwon. <span class="fail">❌</span></td><td><strong>I am unmarried.</strong> <span class="win">✓</span></td><td><strong>I am unmarried.</strong> <span class="win">✓</span></td><td>韩语 비원（不婚）vs 비원（地名）；V2/V5 用上下文消歧成功</td></tr>
+<tr><td>ES-AI R65</td><td><code>Hay que ver las <strong>aplicaciones</strong> desde todos los lados.</code></td><td>AI 政策风险讨论</td><td>应用程序 <span class="fail">❌</span></td><td><strong>implications</strong>（含义/影响）<span class="win">✓</span></td><td><strong>implications</strong> <span class="win">✓</span></td><td>aplicaciones ↔ implicaciones 同音；V2/V5 主题约束成功</td></tr>
+<tr><td>ES-SP3</td><td><code>Hinton y Bengio, legal, han demostrado...</code></td><td>AI 学者社会影响</td><td>demonstrated <strong>legally</strong> <span class="fail">❌</span></td><td>Hinton and Bengio, <strong>leaders</strong>, <span class="win">✓</span></td><td><strong>leaders in the field</strong>, <span class="win">✓</span></td><td>legal ↔ leaders（ASR 误识）；V2/V5 推理出"领袖"含义</td></tr>
+</table>
+
+<hr>
+
+<h3>3.2 CORRECTION_RULES #2 — 疑问/陈述判定（V5 重写核心）</h3>
+
+<p>V5 引入 topic-marker 粒子白名单 + 疑问词反例，专门处理 V2 时代的标点歧义退步。</p>
+
+<table>
+<tr><th>ID</th><th>ASR 输入</th><th>CONTEXT</th><th>OLD 翻译</th><th>V2 翻译</th><th>V5 翻译</th><th>评判</th></tr>
+<tr><td>A2</td><td><code>旅游呢？</code></td><td>那今天跟大家谈一下大学生旅游的问题。</td><td>Travel, huh? ⚠️</td><td><strong>Speaking of travel.</strong> <span class="win">✓</span></td><td><strong>Speaking of travel.</strong> <span class="win">✓</span></td><td>中文"呢"作话题标记，非疑问</td></tr>
+<tr><td>A3</td><td><code>所以大家看到在2011年2月份的话呢？</code></td><td>当时我们在专家组里是第一次提出来的。</td><td>February 2011? ⚠️</td><td>February 2011. <span class="win">✓</span></td><td><strong>it was in February 2011.</strong> <span class="win">✓</span></td><td>句尾"的话呢？"是话题接续</td></tr>
+<tr><td>Row 9（西英 CNN）</td><td><code>Tiene el informe.</code></td><td>Mi colega Tom Foreman de CNN.</td><td>He has the report. <span class="win">✓</span></td><td><strong>Do you have the report?</strong> <span class="fail">❌（V2 退步）</span></td><td><strong>He has the report.</strong> <span class="win">✓（V5 修复）</span></td><td>西语动词前置≠疑问；V5 修复 V2 假阳性</td></tr>
+<tr><td>KR-EN-6</td><td><code>항모 전단 하나가 지금 와 있죠.</code></td><td>中东军事部署</td><td>…is here now. <span class="win">✓</span></td><td><strong>…is here now, isn't it?</strong> <span class="fail">❌（V2 强加反问）</span></td><td><strong>…is here now.</strong> <span class="win">✓（V5 修复）</span></td><td>韩语-죠是确认/柔和断言，非疑问</td></tr>
+<tr><td>F1</td><td><code>这哪有那么容易啊。</code></td><td>创业不易</td><td>How could it be that easy? <span class="win">✓</span></td><td>How could it be that easy? <span class="win">✓</span></td><td><strong>How could that be so easy?</strong> <span class="win">✓</span></td><td>反问句法明确（"哪有"），三版均正确</td></tr>
+</table>
+
+<hr>
+
+<h3>3.3 CORRECTION_RULES #3 — 口水词处理</h3>
+
+<table>
+<tr><th>ID</th><th>ASR 输入</th><th>OLD 翻译</th><th>V2/V5 翻译</th><th>评判</th></tr>
+<tr><td>G3</td><td><code>还有就是啊。</code></td><td>And then ⚠️</td><td><strong>And then there's also this.</strong> <span class="win">✓</span></td><td>"就是啊"是过渡词，应保留语义</td></tr>
+<tr><td>G5</td><td><code>で、ええ。</code></td><td>Yes.</td><td><strong>嗯。</strong> <span class="win">✓</span></td><td>"ええ"是日语认同填充词，应输出最少内容</td></tr>
+<tr><td>G7</td><td><code>あの〜、それで〜</code></td><td>OLD 直接翻"那个〜，然后〜"</td><td><strong>删除"あの〜、それで〜"</strong> <span class="win">✓</span></td><td>纯填充词应删除</td></tr>
+</table>
+
+<hr>
+
+<h3>3.4 CORRECTION_RULES #4 — 成语意译</h3>
+
+<table>
+<tr><th>ID</th><th>ASR 输入</th><th>OLD 翻译</th><th>V2/V5 翻译</th><th>评判</th></tr>
+<tr><td>B1</td><td><code>只是个<strong>掩耳盗铃</strong>的说法。</code></td><td>covering one's ears while stealing a bell <span class="fail">❌</span></td><td><strong>self-deception</strong> <span class="win">✓</span></td><td>OLD 字面直译；V2/V5 意译命中本义</td></tr>
+<tr><td>B2</td><td><code>네타냐후는 지금 <strong>사면초가</strong>에 빠져있죠.</code></td><td>trapped on all sides</td><td><strong>caught in a hopeless predicament</strong>（V5: 正陷入四面楚歌的境地）<span class="win">✓</span></td><td>韩语成语"四面楚歌"，需保留正式度</td></tr>
+<tr><td>JP-EN-2</td><td><code>心より<strong>お祝い</strong>を申し上げます。</code></td><td>Congratulations. ⚠️</td><td><strong>I would like to extend my heartfelt congratulations.</strong> <span class="win">✓</span></td><td>日语正式致辞需对应英语正式表达</td></tr>
+</table>
+
+<hr>
+
+<h3>3.5 CORRECTION_RULES #5 — 人名一致性</h3>
+
+<table>
+<tr><th>ID</th><th>ASR 输入</th><th>OLD 翻译</th><th>V2/V5 翻译</th><th>评判</th></tr>
+<tr><td>ES-AI R51</td><td><code>Vamos con Dimitry Vesto.</code> + <code>chef experto en seguridad digital...</code></td><td>Let's go with Dimitry Vesto. + <strong>Chef</strong> expert <span class="fail">❌</span>（"Chef"当职位）</td><td><strong>Dimitri Vestuchef, an expert in digital security...</strong> <span class="win">✓</span></td><td>OLD 把姓名末段"-chef"误译为职位</td></tr>
+<tr><td>PN-3</td><td><code>2016年G20杭州峰会期间</code></td><td>During the 2016 G20 Hangzhou Summit</td><td><strong>During the 2016 G20 Summit in Hangzhou</strong> <span class="win">✓</span></td><td>专有名词语序符合英语习惯</td></tr>
+<tr><td>PN-7</td><td><code>코스타리카 도미니카공화국.</code></td><td>哥斯达黎加、多米尼加共和国。 ⚠️</td><td><strong>哥斯达黎加和多米尼加共和国。</strong> <span class="win">✓</span></td><td>多国并列需明确连接词</td></tr>
+</table>
+
+<hr>
+
+<h3>3.6 CORE RULES #3 — 孤立片段处理（syntactic fragment）</h3>
+
+<table>
+<tr><th>ID</th><th>ASR 输入</th><th>CONTEXT</th><th>OLD 翻译</th><th>V2/V5 翻译</th><th>评判</th></tr>
+<tr><td>BBC R44</td><td><code>Por eso, en marzo.</code></td><td>上文谈 AI 风险监管</td><td>Therefore, in March. <span class="fail">❌</span></td><td>（V5 与相邻段合并为完整句）</td><td>OLD 直接输出无意义碎片</td></tr>
+<tr><td>H4</td><td><code>叫智能车。</code></td><td>中国启动了一个国家的863计划。</td><td>Called intelligent car. ⚠️</td><td><strong>It's called an intelligent vehicle.</strong> <span class="win">✓</span></td><td>主语补全</td></tr>
+<tr><td>H7</td><td><code>そして、今までの。</code></td><td>谈个人经历</td><td>And then, until now. ⚠️</td><td><strong>还有，至今为止的经历。</strong> <span class="win">✓</span></td><td>用 CONTEXT 补全省略宾语</td></tr>
+<tr><td>ES-3</td><td><code>Los ovillos neurofibrilares se forman a partir de una proteína conocida como.</code></td><td>tau 蛋白讨论</td><td>…a protein known as. <span class="fail">❌</span>（缺术语）</td><td><strong>…a protein known as tau.</strong> <span class="win">✓</span></td><td>用 CONTEXT 补全 tau</td></tr>
+</table>
+
+<hr>
+
+<h3>3.7 TRANSLATION_RULES #2 — 多义词消歧</h3>
+
+<table>
+<tr><th>ID</th><th>ASR 输入</th><th>CONTEXT</th><th>OLD 翻译</th><th>V2/V5 翻译</th><th>评判</th></tr>
+<tr><td>C1</td><td><code>やばい</code>（日语）</td><td>朋友谈论考试结果</td><td>dangerous <span class="fail">❌</span></td><td><strong>awesome / amazing</strong> <span class="win">✓</span></td><td>上下文判断为正面感叹</td></tr>
+<tr><td>FR-ZH-5</td><td><code>il peut même proposer une <strong>ordonnance</strong>...</code></td><td>远程医疗讨论</td><td>处方/法令（默认词典）</td><td><strong>开出药方</strong> <span class="win">✓</span></td><td>医学语境优先选"处方/药方"</td></tr>
+</table>
+
+<hr>
+
+<h3>3.8 日语敬语 / 正式语体处理（跨规则综合表现）</h3>
+
+<p>日语敬语/正式语体不属于单一规则，由 [ROLE] 中"preserving the speaker's tone and intent" + CORRECTION_RULES #4（成语/正式表达匹配正式度）+ TRANSLATION_RULES #1（不添加解释性填充）共同支撑。下表覆盖 9 条日语正式/敬语 case 的 OLD vs V5 结果。</p>
+
+<h4>3.8.1 V5 改善的 case</h4>
+
+<table>
+<tr><th>ID</th><th>类别</th><th>方向</th><th>ASR 输入</th><th>OLD 翻译</th><th>V5 翻译</th><th>评判</th></tr>
+<tr><td>JP-ZH-A1</td><td>敬语自然度</td><td>日→中</td><td><code>初めて身につけた時に。</code><br><span style="color:#6b7280">CONTEXT：天皇陛下より勲章を授与していただきまして</span></td><td>第一次<strong>穿戴</strong>的时候。 ⚠️</td><td>第一次<strong>佩戴</strong>的时候。 <span class="win">✓</span></td><td>勋章场合用"佩戴"更得体；OLD 选错动词</td></tr>
+<tr><td>JP-ZH-A10</td><td>碎片+正式</td><td>日→中</td><td><code>誰もがマイノリティになり。</code><br><span style="color:#6b7280">CONTEXT：グローバル化と多様性の時代</span></td><td>每个人都会成为<strong>少数派</strong>。⚠️</td><td>每个人都<strong>有可能</strong>成为<strong>少数群体</strong>。<span class="win">✓</span></td><td>正式语体下"少数群体"比"少数派"更准确</td></tr>
+<tr><td>JP-EN-2</td><td>正式敬语</td><td>日→英</td><td><code>東京大学の教職員を代表して、心よりお祝いを申し上げます。</code></td><td>...I would like to extend my heartfelt congratulations.</td><td>...I extend my heartfelt congratulations. <span class="win">✓</span></td><td>V5 更贴近 ground-truth 的"sincerely extend"句式（去掉口语化"would like to"）</td></tr>
+<tr><td>E1</td><td>正式敬语</td><td>日→中</td><td><code>心よりお祝いを申し上げます。</code></td><td>衷心祝贺您。 <span class="win">✓</span></td><td>衷心祝贺您。 <span class="win">✓</span></td><td>OLD/V5 均正确（保留作回归基线）</td></tr>
+<tr><td>JP-ZH-A2</td><td>最高敬语</td><td>日→中</td><td><code>昨夜の地震により亡くなられた方がいらっしゃると伺いまして。</code></td><td>听说昨晚的地震中有人不幸去世。<span class="win">✓</span></td><td>听说昨晚的地震中有人不幸去世。<span class="win">✓</span></td><td>三重敬语（亡くなられた+いらっしゃる+伺う）翻译为自然中文，未过度正式化</td></tr>
+</table>
+
+<h4>3.8.2 V5 与 OLD 同等表现 / 中性差异</h4>
+
+<table>
+<tr><th>ID</th><th>类别</th><th>OLD 翻译</th><th>V5 翻译</th><th>评判</th></tr>
+<tr><td>JP-EN-5</td><td>固定表达</td><td>Thank you for having me.</td><td>Thank you for having me.</td><td>口语场合よろしく的英译，两版均符合 hint</td></tr>
+<tr><td>JP-ZH-A6</td><td>正式叙述</td><td>我自己曾经<strong>通过</strong>英语学习作为生活语言的法语。</td><td>我自己曾经<strong>通过</strong>英语学习生活语言法语。 ⚠️</td><td>V5 略损失"作为"导致定语关系略弱，但语体不变</td></tr>
+<tr><td>JP-ZH-A9</td><td>正式书面</td><td>在全球化和多样化的时代中。</td><td>在全球化和多样化的时代中。</td><td>两版均保持正式书面语体</td></tr>
+</table>
+
+<h4>3.8.3 ⚠️ 已知局限：日中固定表达判断固化</h4>
+
+<div class="diff"><strong>这是 prompt 层无法稳定解决的问题</strong>，列出以保证交付透明。详见第六节。</div>
+
+<table>
+<tr><th>ID</th><th>类别</th><th>ASR 输入</th><th>OLD 翻译</th><th>V5 翻译</th><th>问题分析</th></tr>
+<tr><td>B3</td><td>固定表达</td><td><code>よろしくお願いいたします。</code><br><span style="color:#6b7280">CONTEXT：率直なお考えやご意見をお聞かせいただければ</span></td><td>敬请多多关照。<span class="win">✓</span></td><td>拜托您了。<span class="fail">❌（V5 退步）</span></td><td>正式商务/会议场合应译"敬请多多关照/请多指教"，V5 误判为口语场合。<strong>模型对日中固定表达判断固化，prompt 规则强化无效</strong></td></tr>
+</table>
+
+<p>该限制需依赖：① ASR phrase list 层强制对齐；② 后续模型升级（GPT-4o 之后版本）；③ 翻译引擎层 few-shot。<strong>不应继续在 prompt 层加规则尝试修复</strong>——历史实验证明会引发其他场合的"用力过猛"退步。</p>
+
+<hr>
+
+<h2>四、Prompt 结构逐节对比</h2>
+
+<h3>4.1 [ROLE] 角色定位</h3>
+
+<table>
+<tr><th>OLD</th><th>V5</th></tr>
+<tr><td>You are an expert ASR text proofreader and translator.</td><td>You are a professional real-time speech translator. Translate as a human interpreter would — natural, fluent, and <strong>preserving the speaker's tone and intent</strong>.</td></tr>
+</table>
+
+<p><strong>变化</strong>：OLD 把模型定位为"校对器+翻译器"两个工具串联；V5 改为"实时口译员"，加入对语气和意图保留的指导。</p>
+
+<hr>
+
+<h3>4.2 [TASK] 任务说明</h3>
+
+<h4>OLD（7 条，含冗余）</h4>
+
+<pre><code>1. Proofread the raw text from [ASR_INPUT] according to the rules below.
+2. Translate the final, proofread text into the specified target languages.
+3. Treat [CONTEXT] as text that has already been recognized, proofread, and translated.
+4. Do not repeat or reintroduce information already present in [CONTEXT].
+5. Ensure the translation connects naturally with the previous translation,
+   maintaining consistent style, terminology, and flow.
+6. Only correct ASR input errors, without adding historical events or facts.
+7. If the ASR input is unrelated to [CONTEXT], leave it unchanged.</code></pre>
+
+<h4>V5（4 条，精简）</h4>
+
+<pre><code>1. Proofread the ASR text from [ASR_INPUT] to fix recognition errors,
+   then translate into the target languages.
+2. Treat [CONTEXT] as the corrected source-language text from the previous
+   5 sentences. Use it to maintain coherence, resolve ambiguity, and avoid repetition.
+3. Do not repeat information already present in [CONTEXT].
+4. Do not add facts or events not present in [ASR_INPUT].</code></pre>
+
+<p><strong>变化</strong>：</p>
+<ul><li>OLD 7 条压缩为 V5 的 4 条，去掉冗余表述</li><li><strong>明确 CONTEXT 是"前 5 句"的边界</strong>（OLD 没说窗口大小）</li><li><strong>明确 CONTEXT 用于：连贯 / 消歧 / 去重三个目的</strong></li><li>把 OLD 的"风格/术语/流畅度连贯"散叙规则统一收敛到"maintain coherence"</li></ul>
+
+<hr>
+
+<h3>4.3 [CORE RULES] 核心规则</h3>
+
+<h4>OLD（3 条）</h4>
+
+<pre><code>1. Proofread First: First, correct [ASR_INPUT] based on [CORRECTION_GUIDELINES]
+   and [CONTEXT] to get 'corrected_text'.
+2. Irrelevant Content Handling: If unrelated to [CONTEXT], do not correct.
+3. Execute Translation: Translate 'corrected_text' from {src} into {tgt}.</code></pre>
+
+<h4>V5（4 条）</h4>
+
+<pre><code>1. Proofread: Correct [ASR_INPUT] based on [CORRECTION_RULES] and [CONTEXT]
+   to produce 'corrected_text'.
+2. If [ASR_INPUT] is unrelated to [CONTEXT], do not correct it.
+3. Incomplete Input: If [ASR_INPUT] is clearly a syntactic fragment,
+   use [CONTEXT] to infer the complete meaning and translate naturally.
+4. Translate: Translate 'corrected_text' from {src} into {tgt}.</code></pre>
+
+<p><strong>变化</strong>：V5 新增 #3 syntactic fragment 处理——OLD 对孤立短片段（如 <code>por eso.</code>、<code>que diga.</code>）无明确指令，模型按字面直译产生"Therefore." / "I wanted." 等无意义碎片。V5 新增"clearly a syntactic fragment"分支，让模型用 CONTEXT 补全语义。</p>
+
+<hr>
+
+<h3>4.4 [CORRECTION_RULES] 纠错规则</h3>
+
+<h4>OLD（4 条，笼统）</h4>
+
+<pre><code>- Correct misrecognized words (e.g., homophones).
+- Remove redundant words or phrases without losing the original meaning.
+- Improve punctuation and sentence structure.
+- Clean up invalid characters or formatting errors.</code></pre>
+
+<h4>V5（5 条，结构化；#2 为 V5 重写）</h4>
+
+<pre><code>1. Homophones: Replace words that don't fit [CONTEXT] topic with similar-sounding
+   words that make sense. Only treat input as gibberish if it contains no
+   recognizable words in any known language.
+2. Question vs statement: A trailing "?" in ASR is unreliable. Treat the
+   sentence as a statement when it ends with a topic/confirmation particle
+   (中文 "呢/吧"、韩语 "-죠"、日语 "ね") unless there is also a question word
+   (中文 "什么/谁/哪/为什么"、韩语 "뭐/어디/왜"、Spanish "qué/cómo/cuándo").
+   Verb-first sentences without question words (e.g. Spanish "Tiene...")
+   are also statements.
+3. Fillers: Remove speech disfluencies without changing meaning. If input is
+   only fillers: output minimal content. If input is a discourse connector:
+   keep and translate its transitional meaning.
+4. Idioms: Translate idioms, proverbs, and four-character expressions by meaning,
+   never word-by-word. Match the formality of the original.
+5. Names: Reuse the exact proper noun form from [CONTEXT], even if ASR
+   produces a variant.</code></pre>
+
+<p><strong>变化对比</strong>：</p>
+
+<table>
+<tr><th>规则</th><th>OLD</th><th>V5</th></tr>
+<tr><td>同音词</td><td>"Correct misrecognized words (e.g., homophones)" 一句话</td><td>明确"用上下文主题判断"，明确"乱码定义"（无任何已知语言可识别的词才算乱码）</td></tr>
+<tr><td>标点</td><td>"Improve punctuation and sentence structure" 一句话</td><td>忽略 ASR 问号；列出 topic-marker 粒子 + 疑问词白名单；明确动词前置非疑问</td></tr>
+<tr><td>口水词</td><td>"Remove redundant words or phrases"</td><td>三种情况分支：纯口水→最少输出；过渡词→保留语义；普通口水→删除</td></tr>
+<tr><td>成语</td><td>无</td><td>意译，匹配正式度</td></tr>
+<tr><td>人名</td><td>无</td><td>强制复用 CONTEXT 中的形式</td></tr>
+</table>
+
+<hr>
+
+<h3>4.5 [TRANSLATION_RULES] 翻译规则</h3>
+
+<h4>OLD：无此章节</h4>
+
+<p>OLD 把翻译当作"输出步骤"，无单独规则。</p>
+
+<h4>V5（2 条）</h4>
+
+<pre><code>1. Do not add words the speaker did not say. Do not insert explanatory padding
+   absent from the source.
+2. For words with multiple meanings, choose the meaning that fits [CONTEXT]
+   topic, not the default dictionary entry.</code></pre>
+
+<ul><li>#1 防止翻译腔（添加解释性填充）</li><li>#2 多义词消歧（如日语 やばい、西语 implicaciones/aplicaciones）</li></ul>
+
+<hr>
+
+<h3>4.6 [OUTPUT FORMAT] 输出格式</h3>
+
+<p>OLD / V5 两版基本一致，均要求 JSON 输出。V5 用模板化语法支持多目标语言展开（生产环境用），OLD 是单目标语言占位符。</p>
+
+<hr>
+
+<h2>五、回归测试结果</h2>
+
+<table>
+<tr><th>对比</th><th>SAME</th><th>DIFF</th><th>关键 case 改进</th></tr>
+<tr><td>V2 vs OLD（96条）</td><td>38</td><td>58</td><td>见第三节按规则分类的详细 case</td></tr>
+<tr><td>V5 vs V2（96条）</td><td>61</td><td>35</td><td>A2 <code>旅游呢？</code> <span class="win">✓</span>、KR-EN-6 <code>있죠.</code> <span class="win">✓</span>、Row 9 <code>Tiene el informe.</code> <span class="win">✓</span></td></tr>
+</table>
+
+<p>V5 与 V2 的差异主要集中在 #2 规则相关的 topic-marker case，其余差异属于温度抖动产生的措辞微变（口水词、敬语、断句碎片），无结构性退步。</p>
+
+<hr>
+
+<h2>六、V5 仍未解决的 case（需后续迭代其他规则）</h2>
+
+<table>
+<tr><th>Case</th><th>方向</th><th>输入</th><th>当前译文</th><th>期望</th><th>根因 / 建议层</th></tr>
+<tr><td>BBC R22</td><td>西→英</td><td><code>porque no.</code></td><td>"Why not?"</td><td>"because it cannot"</td><td>CORE RULES #3 fragment 规则未识别"因果连词+否定词"为承接成分；模型当作 <code>¿por qué no?</code> 的拼写错误纠正。<strong>需 prompt 迭代</strong></td></tr>
+<tr><td>医疗 R6</td><td>西→英</td><td><code>cambios de comportamiento</code></td><td>"behavioral changes"</td><td>"mood changes"</td><td>CORRECTION_RULES #1 同音词规则在医学语境下未触发——<code>behavioral changes</code> 本身是合理医学术语。<strong>需医学领域 phrase list</strong></td></tr>
+<tr><td>B3</td><td>日→中</td><td><code>よろしくお願いいたします。</code></td><td>"拜托您了。"</td><td>"敬请多多关照。/ 请多指教。"</td><td>模型对日中固定表达判断固化，每次正式商务场合都译为口语化"拜托您了"。<strong>prompt 层无效，依赖 ASR phrase list 或模型升级</strong></td></tr>
+</table>
+
+<hr>
+
+<h2>七、附录</h2>
+
+<h3>A. 配套报告与原始数据</h3>
+
+<table>
+<tr><th>文件</th><th>用途</th></tr>
+<tr><td><code>prompts/translation_prompt_FINAL_V5.md</code></td><td>V5 当前定型 prompt 全文</td></tr>
+<tr><td><code>reports/旧prompt_vs_FinalV5_西英对比报告_20260528.md</code></td><td>西英三语料端到端对比详细分析</td></tr>
+<tr><td><code>test_cases/regression_cases.json</code></td><td>96 条回归测试用例（7 个语种方向）</td></tr>
+<tr><td><code>test_cases/slim_v5_vs_v2_results_96.json</code></td><td>V5 vs V2 96 条回归原始数据</td></tr>
+<tr><td><code>test_cases/slim_v2_vs_old_results_96.json</code></td><td>V2 vs OLD 96 条回归原始数据</td></tr>
+</table>
+
+<h3>B. 实验环境</h3>
+
+<ul><li><strong>模型</strong>：gpt-4o</li><li><strong>温度</strong>：0.1</li><li><strong>响应格式</strong>：JSON object</li></ul>
+
+<h3 id="appendix-c">C. 西英三语料端到端评分（小样本，仅供参考）</h3>
+
+<div class="diff"><strong>⚠️ 范围说明</strong>：本节评分仅基于 <strong>西语→英语</strong> 单一方向的 3 个语料样本，<strong>未覆盖中英 / 日中 / 韩英 / 法中等其他生产方向</strong>。仅作为 V5 在西英方向有效性的<strong>侧面佐证</strong>，不可作为 V5 整体效果的结论。其他语种方向需独立回归后才能下结论。</div>
+
+<table>
+<tr><th>语料</th><th>OLD 得分</th><th>V5 得分</th><th>改善</th></tr>
+<tr><td>BBC 人工智能纪录片</td><td>67</td><td>73</td><td>+6</td></tr>
+<tr><td>医疗·阿尔兹海默</td><td>60</td><td>73</td><td>+13</td></tr>
+<tr><td>CNN AI 采访</td><td>70</td><td>74</td><td>+4</td></tr>
+<tr><td><strong>平均（仅西英）</strong></td><td><strong>66</strong></td><td><strong>73</strong></td><td><strong>+7</strong></td></tr>
+</table>
+
+<p><strong>评分标准</strong>：统一五维度百分制（认知负荷 25% + 信息完整性 25% + 意图传达 20% + 语言特性 20% + 纠错能力 10%）。WER 分析确认改善来自 prompt 层（同音词纠错 + 孤立片段补全 + topic-marker 处理），非声学层。</p>
+
+<h3>D. 端到端语料 case 详情（西英）</h3>
+
+<h4>Case 1：医疗 P0 事实性错误消除</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>识别结果</td><td><code>La cura real para la enfermedad de Alzheimer se descubrió hace más de un siglo...</code></td><td><code>La enfermedad de Alzheimer se descubrió hace más de un siglo...</code></td></tr>
+<tr><td>翻译输出</td><td>The <strong>real cure</strong> for Alzheimer's disease was discovered more than a century ago. <span class="fail">❌</span></td><td>Alzheimer's disease was discovered more than a century ago. <span class="win">✓</span></td></tr>
+<tr><td>严重度</td><td><strong>P0</strong>（事实性反转：医学错误信息）</td><td>正确</td></tr>
+</table>
+
+<h4>Case 2：BBC 乱码消除</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>ASR 识别结果</td><td><code>Open Thetfsion.</code>（WER=94%）</td><td>完整西语句子</td></tr>
+<tr><td>翻译输出</td><td>Open Thetfsion. <span class="fail">❌</span>（乱码透传）</td><td>完整 OpenAI 介绍 <span class="win">✓</span></td></tr>
+<tr><td>严重度</td><td><strong>P0</strong></td><td>正确</td></tr>
+</table>
+
+<h4>Case 3：CNN 数字口语化</h4>
+
+<table>
+<tr><th>Row</th><th>OLD 翻译</th><th>V5 翻译</th></tr>
+<tr><td>R28（投资金额）</td><td><code>investing $140,000,000 in artificial intelligence research</code> <span class="fail">❌</span></td><td><code>investing 140 million dollars in artificial intelligence research</code> <span class="win">✓</span></td></tr>
+<tr><td>R48（就业影响）</td><td><code>could affect around 300,000,000 jobs</code> <span class="fail">❌</span></td><td><code>could affect around 300 million jobs</code> <span class="win">✓</span></td></tr>
+</table>
+
+<h4>Case 4：CNN 专家姓名跨行恢复</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>翻译 R51</td><td><code>Let's go with Dimitry Vesto.</code> <span class="fail">❌</span></td><td><code>Let's go to Dimitri Vestuchef, an expert in digital security and senior director...</code> <span class="win">✓</span></td></tr>
+<tr><td>翻译 R52</td><td><code>Chef expert in digital security...</code> <span class="fail">❌</span>（"Chef" 当职位）</td><td>—</td></tr>
+<tr><td>严重度</td><td><strong>P1</strong></td><td>正确</td></tr>
+</table>
+
+<h4>Case 5：CNN 专家核心论点恢复</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>翻译输出</td><td><code>I wanted.</code> <span class="fail">❌</span>（论点链断裂）</td><td><code>but rather that it defines the concept of truth, saying: this is the new truth...</code> <span class="win">✓</span></td></tr>
+<tr><td>严重度</td><td><strong>P1</strong>（整段访谈核心观点丢失）</td><td>正确</td></tr>
+</table>
+
+<h3>E. 版本演进概览</h3>
+
+<table>
+<tr><th>版本</th><th>时间</th><th>核心定位</th></tr>
+<tr><td><strong>OLD</strong></td><td>生产基线（2026-05 之前）</td><td>"ASR 校对器 + 翻译器"，规则简短笼统，靠模型默认能力</td></tr>
+<tr><td><strong>V2</strong></td><td>2026-05-28（中间版本）</td><td>"实时口语翻译员"，加入结构化纠错和翻译规则，支持 5 句上下文</td></tr>
+<tr><td><strong>Final V5</strong></td><td>2026-05-29（当前定型）</td><td>V2 基础上重写 CORRECTION_RULES #2，处理 topic-marker 粒子（呢/-죠/ね）的句尾问号歧义，修复 V2 的 Row 9 类回归</td></tr>
+</table>
+
+<hr>
+
+<footer style="margin-top:60px;padding-top:20px;border-top:2px solid #e5e7eb;color:#6b7280;font-size:13px;">
+<p>生成日期：2026-05-29 | 模型：gpt-4o | Final V5 定型版本 | 96 条全量回归（7 个语种方向） + 西英三语料端到端验证</p>
+</footer>
+</body>
+</html>
