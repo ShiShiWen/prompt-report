@@ -583,23 +583,24 @@ li{margin:4px 0}
 
 <p><strong>关键发现：V5在日中方向无独有P1/P2级翻译问题</strong>——所有残留问题均与OLD共有，源于ASR层的系统性同音词错误。</p>
 
-<h3>F.4 日中 + 西英综合评价</h3>
+<h3>F.4 三方向综合评价（西英 + 日中 + 中英）</h3>
 
 <table>
 <tr><th>方向</th><th>语料数</th><th>OLD 平均</th><th>V5 Prompt 平均</th><th>改善</th></tr>
 <tr><td>西语→英语</td><td>3组</td><td>66</td><td>73</td><td>+7</td></tr>
 <tr><td>日语→中文</td><td>4组</td><td>66.9</td><td>80.0</td><td>+13.1</td></tr>
-<tr><td><strong>综合</strong></td><td><strong>7组</strong></td><td><strong>~66</strong></td><td><strong>~77</strong></td><td><strong>+11</strong></td></tr>
+<tr><td>中文→英文</td><td>4组</td><td>60.4</td><td>63.3</td><td>+2.9</td></tr>
+<tr><td><strong>综合</strong></td><td><strong>11组</strong></td><td><strong>~64</strong></td><td><strong>~72</strong></td><td><strong>+8</strong></td></tr>
 </table>
 
 <div class="highlight">
-<strong>综合结论</strong>：V5 Prompt 在西英和日中两个方向上均显著优于OLD Prompt。日中方向的改善幅度（+13.1）甚至大于西英方向（+7），表明V5的CORRECTION_RULES和TRANSLATION_RULES在日中方向同样有效。V5 Prompt 可确认作为生产基线。
+<strong>综合结论</strong>：V5 Prompt 在三个语种方向（西英/日中/中英）共11组语料上均优于OLD Prompt，综合提升约+8分。日中方向改善最显著（+13.1），西英方向次之（+7），中英方向改善温和（+2.9）。中英方向改善幅度较小的原因：OLD在中英方向本身有部分优势（ASR分句更完整、个别专有名词纠错强），而V5存在1处P1纠错失败（"同传→同船"）。V5 Prompt 可确认作为生产基线。
 </div>
 
 <hr>
 
 <footer style="margin-top:60px;padding-top:20px;border-top:2px solid #e5e7eb;color:#6b7280;font-size:13px;">
-<p>生成日期：2026-05-29（日中验证补充于 2026-06-03）| 模型：gpt-4o | Final V5 定型版本 | 101 条回归 case（7 个语种方向） + 西英三语料 + 日中四语料端到端验证</p>
+<p>生成日期：2026-05-29（日中+中英验证补充于 2026-06-03）| 模型：gpt-4o | Final V5 定型版本 | 101 条回归 case（7 个语种方向） + 西英三语料 + 日中四语料 + 中英四语料端到端验证</p>
 </footer>
 </body>
 </html>
