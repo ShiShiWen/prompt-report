@@ -583,7 +583,104 @@ li{margin:4px 0}
 
 <p><strong>关键发现：V5在日中方向无独有P1/P2级翻译问题</strong>——所有残留问题均与OLD共有，源于ASR层的系统性同音词错误。</p>
 
-<h3>F.4 三方向综合评价（西英 + 日中 + 中英）</h3>
+<hr>
+
+<h2>附录G：中英方向端到端验证（2026-06-03 补充）</h2>
+
+<div class="highlight">
+<strong>验证范围</strong>：中文→英文，4 组真实语料（共 368 条），覆盖：学术教育、口语娱乐、金融科技、工程学术。<br>
+<strong>对比方式</strong>：V5 Prompt vs OLD Prompt，同一参考文本（GT）评分。OLD/新Prompt分数引用已有报告（20260528）。<br>
+<strong>评分标准</strong>：与西英/日中相同的五维度百分制。
+</div>
+
+<h3>G.1 总分对比</h3>
+
+<table>
+<tr><th>语料</th><th>OLD</th><th>新Prompt</th><th>V5 Prompt</th><th>V5 vs 新</th><th>趋势</th></tr>
+<tr><td>大学生旅游（学术/教育）</td><td><strong>78.5</strong></td><td>67.0</td><td>69.0</td><td>+2.0</td><td><span class="win">↑ 微进步</span></td></tr>
+<tr><td>潘长江交流（口语/娱乐）</td><td>56.0</td><td>57.0</td><td><strong>61.0</strong></td><td>+4.0</td><td><span class="win">↑ 进步</span></td></tr>
+<tr><td>消费科技投资分享（金融/专业）</td><td>51.0</td><td>47.5</td><td><strong>55.0</strong></td><td>+7.5</td><td><span class="win">↑↑ 进步</span></td></tr>
+<tr><td>王云鹏教授+车路协同（工程/学术）</td><td>56.0</td><td>65.0</td><td><strong>68.0</strong></td><td>+3.0</td><td><span class="win">↑ 进步</span></td></tr>
+<tr><td><strong>平均（中英）</strong></td><td><strong>60.4</strong></td><td><strong>59.1</strong></td><td><strong>63.3</strong></td><td><strong>+4.2</strong></td><td><span class="win"><strong>↑ 进步</strong></span></td></tr>
+</table>
+
+<p><strong>注：</strong>大学生旅游中 OLD 得分最高（78.5），因其 ASR 分句更完整且无 P0/P1 错误。V5 在该语料存在 1 处 P1 纠错失败（"同传→同船"），但在其余 3 组语料上均为最优。</p>
+
+<h3>G.2 V5 中英方向 亮点 Case</h3>
+
+<h4>Case ZH-1：标点纠正——"旅游呢？"经典问题修复</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>ASR 输入</td><td><code>旅游呢？</code></td><td><code>旅游呢。</code></td></tr>
+<tr><td>翻译输出</td><td>Travel, <strong>huh?</strong> <span class="fail">❌</span></td><td><strong>Traveling.</strong> <span class="win">✓</span></td></tr>
+<tr><td>对比说明</td><td colspan="2">"旅游呢"是话题引入的过渡语气词，非疑问。OLD 错误翻为反问/确认语气。V5 正确处理为简洁的话题标记。这是96回归中的经典 case（A2）。</td></tr>
+</table>
+
+<h4>Case ZH-2：ASR错误规避——"月经→云鲸"品牌名</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>ASR 输入</td><td><code>当时看到月经的众筹效果非常好。</code></td><td><code>看到当时的众筹效果非常好。</code></td></tr>
+<tr><td>翻译输出</td><td>The crowdfunding for <strong>menstrual products</strong> has been very successful. <span class="fail">❌</span></td><td>We saw that the <strong>crowdfunding results</strong> at the time were very good. <span class="win">✓</span></td></tr>
+<tr><td>严重度</td><td><strong>P1</strong>（ASR将品牌名"云鲸"误识别为"月经"后直译）</td><td>正确（智慧规避ASR错误词）</td></tr>
+</table>
+
+<h4>Case ZH-3：数字翻译——量级正确</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>ASR 输入</td><td><code>基本上都是21以上的一个消费规模的企业。</code></td><td><code>基本上都是21以上的一个消费规模的企业。</code></td></tr>
+<tr><td>翻译输出</td><td>enterprises with a consumption scale of <strong>21</strong> or above. <span class="fail">❌</span></td><td>companies with a sales scale of over <strong>two billion</strong>. <span class="win">✓</span></td></tr>
+<tr><td>对比说明</td><td colspan="2">原文"二十亿以上"。OLD数量级完全错误（21 vs 二十亿），V5正确翻译。</td></tr>
+</table>
+
+<h4>Case ZH-4：成语传达——"人困马乏"</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>ASR 输入</td><td colspan="2"><code>星期一早晨人困马乏地回到学校。</code></td></tr>
+<tr><td>翻译输出</td><td>they returned to school <strong>exhausted</strong>.</td><td>they return to school <strong>exhausted and worn out</strong>. <span class="win">✓</span></td></tr>
+<tr><td>对比说明</td><td colspan="2">V5 的"exhausted and worn out"更好地传达了成语"人困马乏"的双重疲惫感（人也累，马也乏）。</td></tr>
+</table>
+
+<h4>Case ZH-5：口语/方言处理——潘长江东北话</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>ASR 输入</td><td><code>我三岁半大巴大巴穿活裆裤。</code></td><td><code>我三岁半大把大把穿开裆裤。</code></td></tr>
+<tr><td>翻译输出</td><td>I wore crotchless pants on the <strong>big bus</strong>. <span class="fail">❌</span></td><td>I wore <strong>split pants</strong> all the time. <span class="win">✓</span></td></tr>
+<tr><td>严重度</td><td><strong>P1</strong>（"大巴"误理解为交通工具）</td><td>正确（正确理解为方言拟声词+开裆裤）</td></tr>
+</table>
+
+<h4>Case ZH-6：专有名词纠错——科研项目（V5优于OLD）</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>ASR 输入</td><td colspan="2"><code>国家863、973和科技支撑等一批国家级的研究项目。</code></td></tr>
+<tr><td>翻译输出</td><td>National projects such as 863, 973, and Science and Technology <strong>Voice</strong>. <span class="fail">❌</span></td><td>National-level research projects such as the 863 Program, the 973 Program, and the Science and Technology <strong>Support Program</strong>. <span class="win">✓</span></td></tr>
+<tr><td>对比说明</td><td colspan="2">OLD将"科技支撑"错译为"Science and Technology Voice"（科技之声）。V5正确翻为标准译名"Support Program"。</td></tr>
+</table>
+
+<h3>G.3 V5 中英方向 仍存在的问题</h3>
+
+<table>
+<tr><th>问题</th><th>语料</th><th>说明</th><th>严重度</th><th>OLD表现</th></tr>
+<tr><td>"同传"→"same ship"纠错失败</td><td>大学生旅游 Row 68</td><td>ASR识别为"同船"，V5未纠正（OLD/新Prompt均正确翻为"simultaneous interpretation"）</td><td><strong>P1</strong></td><td>OLD正确 ✓</td></tr>
+<tr><td>"中信产业基金"翻译错误</td><td>消费科技 Row 10</td><td>V5翻为"central industry fund"，应为"CITIC Industrial Fund"</td><td>P2</td><td>OLD正确 ✓</td></tr>
+<tr><td>"潘长江"→"Tan Changjiang"</td><td>潘长江 Row 82</td><td>ASR误识别为"谭长江"，V5未纠正</td><td>P2</td><td>OLD正确 ✓</td></tr>
+<tr><td>"大模型"→"major breakthroughs"</td><td>消费科技 Row 97</td><td>ASR误识别为"大波音"，V5翻为模糊的"major breakthroughs"</td><td>P2</td><td>OLD正确翻为"large models" ✓</td></tr>
+</table>
+
+<p><strong>关键发现：V5在中英方向存在1处独有P1错误（"同传→同船"），以及少数专有名词纠错不如OLD的case。</strong> OLD在特定专有名词纠错上（CITIC、大模型、潘长江）表现最强，这是其大学生旅游得分较高的原因之一。</p>
+
+<h3>G.4 中英方向结论</h3>
+
+<div class="highlight">
+<strong>V5 整体最优（63.3分）</strong>，优于新Prompt（59.1）和OLD（60.4）。核心优势：自然度高、ASR错误规避策略好、数字翻译准确、口语/方言处理出色。<br><br>
+<strong>OLD 在大学生旅游单项最高（78.5）</strong>，因其保守策略避免了幻觉、ASR分句更完整、部分专有名词纠错最强。<br><br>
+<strong>V5 主要短板</strong>：个别专有名词纠错不如OLD（同传、中信、大模型），在正式/学术场景中表现稳定但不突出。
+</div>
 
 <table>
 <tr><th>方向</th><th>语料数</th><th>OLD 平均</th><th>V5 Prompt 平均</th><th>改善</th></tr>
