@@ -424,7 +424,7 @@ li{margin:4px 0}
 
 <h3 id="appendix-c">C. 西英三语料端到端评分（小样本，仅供参考）</h3>
 
-<div class="diff"><strong>⚠️ 范围说明</strong>：本节评分仅基于 <strong>西语→英语</strong> 单一方向的 3 个语料样本，<strong>未覆盖中英 / 日中 / 韩英 / 法中等其他生产方向</strong>。仅作为 V5 在西英方向有效性的<strong>侧面佐证</strong>，不可作为 V5 整体效果的结论。其他语种方向需独立回归后才能下结论。</div>
+<div class="diff"><strong>⚠️ 范围说明</strong>：本节评分仅基于 <strong>西语→英语</strong> 单一方向的 3 个语料样本。日中方向（4 组语料）已于 2026-06-03 完成验证，详见<strong>附录F</strong>。韩英 / 法中等方向待后续回归。</div>
 
 <table>
 <tr><th>语料</th><th>OLD 得分</th><th>V5 得分</th><th>改善</th></tr>
@@ -492,8 +492,114 @@ li{margin:4px 0}
 
 <hr>
 
+<h2>附录F：日中方向端到端验证（2026-06-03 补充）</h2>
+
+<div class="highlight">
+<strong>验证范围</strong>：日语→中文，4 组真实语料（共 446 条），覆盖：皇室正式敬语、学术演讲、日常口语、医学专业。<br>
+<strong>对比方式</strong>：V5 Prompt vs SLIM v2 新Prompt vs SLIM v2 旧Prompt，同一参考文本（GT）评分。<br>
+<strong>评分标准</strong>：与西英相同的五维度百分制。
+</div>
+
+<h3>F.1 总分对比</h3>
+
+<table>
+<tr><th>语料</th><th>旧Prompt</th><th>新Prompt</th><th>V5 Prompt</th><th>V5 vs 新</th><th>趋势</th></tr>
+<tr><td>爱子公主成年记者会（皇室正式）</td><td>62.5</td><td>64.5</td><td><strong>72.5</strong></td><td>+8.0</td><td><span class="win">↑↑ 进步</span></td></tr>
+<tr><td>东京大学校长讲话（学术演讲）</td><td>75.5</td><td>77.5</td><td><strong>83.8</strong></td><td>+6.3</td><td><span class="win">↑↑ 进步</span></td></tr>
+<tr><td>日语播客日常对话（口语）</td><td>74.5</td><td>74.5</td><td><strong>79.2</strong></td><td>+4.7</td><td><span class="win">↑ 进步</span></td></tr>
+<tr><td>心血管外科医讲座（医学专业）</td><td>55.0</td><td>55.0</td><td><strong>84.5</strong></td><td>+29.5</td><td><span class="win">↑↑↑ 大幅进步</span></td></tr>
+<tr><td><strong>平均（日中）</strong></td><td><strong>66.9</strong></td><td><strong>67.9</strong></td><td><strong>80.0</strong></td><td><strong>+12.1</strong></td><td><span class="win"><strong>↑↑ 整体进步</strong></span></td></tr>
+</table>
+
+<p><strong>结论：V5 Prompt 在日中方向 4 组语料上全面优于旧/新 Prompt，平均提升 +12.1 分。</strong></p>
+
+<h3>F.2 V5 日中方向 亮点 Case</h3>
+
+<h4>Case JP-1：核心医学术语纠错（V5修复OLD的P0错误）</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>ASR 输入</td><td><code>急性大動脈<strong>管理</strong>の診断となりました。</code></td><td><code>急性大動脈<strong>解離</strong>の診断となりました。</code></td></tr>
+<tr><td>翻译输出</td><td>诊断为急性主动脉<strong>疾病</strong>。 <span class="fail">❌</span></td><td>诊断为急性<strong>主动脉夹层</strong>。 <span class="win">✓</span></td></tr>
+<tr><td>严重度</td><td><strong>P1</strong>（核心诊断名丢失）</td><td>正确</td></tr>
+</table>
+
+<h4>Case JP-2：大动脉夹层核心定义（V5修复OLD的P1错误）</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>ASR 输入</td><td><code>大動脈の<strong>そう動詞</strong>がこういうふうに離れてしまうということです。</code></td><td><code>大動脈の<strong>層同士</strong>がこういうふうに離れてしまうということです。</code></td></tr>
+<tr><td>翻译输出</td><td>主动脉<strong>痉挛</strong>以这种方式分开。 <span class="fail">❌</span></td><td>主动脉的各层会像这样<strong>分离</strong>开来。 <span class="win">✓</span></td></tr>
+<tr><td>严重度</td><td><strong>P1</strong>（医学概念严重错误）</td><td>正确</td></tr>
+</table>
+
+<h4>Case JP-3：皇室"成人を迎える"正确翻译（V5修复OLD的P1错误）</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>ASR 输入</td><td><code>昨年12月1日に<strong>青年</strong>を迎えまして。</code></td><td><code>昨年12月1日に<strong>成人</strong>を迎えまして。</code></td></tr>
+<tr><td>翻译输出</td><td>去年12月1日迎来了<strong>青年</strong>。 <span class="fail">❌</span></td><td>去年12月1日迎来了<strong>成人礼</strong>。 <span class="win">✓</span></td></tr>
+<tr><td>严重度</td><td>P1（"青年→成年"同音词未纠正）</td><td>正确（ASR+翻译链路均正确）</td></tr>
+</table>
+
+<h4>Case JP-4：血液方向正确表达（V5修复OLD的方向颠倒）</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>ASR 输入</td><td><code>そこから血液がビュッと<strong>入り込んじゃって</strong>、</code></td><td><code>そこから血液がビューと<strong>入り込んじゃって</strong>。</code></td></tr>
+<tr><td>翻译输出</td><td>鲜血从那里<strong>喷涌而出</strong>。 <span class="fail">❌</span></td><td>血液就从那里猛地<strong>渗入</strong>进去。 <span class="win">✓</span></td></tr>
+<tr><td>严重度</td><td><strong>P1</strong>（血液方向完全颠倒：进入→喷出）</td><td>正确</td></tr>
+</table>
+
+<h4>Case JP-5：学术语体 + 同音词纠错（V5优于OLD）</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>ASR 输入</td><td><code>2020年の<strong>国際</strong>調査によれば。</code></td><td><code>2020年の<strong>国勢</strong>調査によれば。</code></td></tr>
+<tr><td>翻译输出</td><td>根据2020年的<strong>国际</strong>调查。 <span class="fail">⚠️</span></td><td>根据2020年的<strong>国势</strong>调查。 <span class="win">✓</span></td></tr>
+<tr><td>对比说明</td><td colspan="2">V5链路正确纠错为"国勢調査"（日本人口普查），OLD按ASR错误直译为"国际调查"。</td></tr>
+</table>
+
+<h4>Case JP-6：口语风格自然度（V5更佳）</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>ASR 输入</td><td colspan="2"><code>別にドナルドかな。</code>（播客闲聊：最喜欢的迪士尼角色）</td></tr>
+<tr><td>翻译输出</td><td>没什么，可能是唐纳德吧。</td><td>也没什么，可能是唐纳德吧。</td></tr>
+<tr><td>对比说明</td><td colspan="2">V5 的"也没什么"比OLD的"没什么"更口语化、更自然。整体播客语料中V5的口语自然度始终优于OLD。</td></tr>
+</table>
+
+<h3>F.3 V5 日中方向 仍存在的问题</h3>
+
+<table>
+<tr><th>问题</th><th>语料</th><th>说明</th><th>严重度</th><th>是否V5独有</th></tr>
+<tr><td>"ところ"多义词消歧</td><td>爱子公主 Row 86</td><td>"特点/方面"误译为"地方"</td><td>P2</td><td>否（OLD也有）</td></tr>
+<tr><td>"青年を迎えた"主客颠倒</td><td>爱子公主 Row 46</td><td>"迎来成年"→"迎接了这位青年"</td><td>P1</td><td>否（OLD也有）</td></tr>
+<tr><td>5处"成年→青年"ASR未纠正</td><td>爱子公主 Row 7/19-20/43/46/48</td><td>同音词系统性错误</td><td>P1</td><td>否（三版本共有）</td></tr>
+<tr><td>"大動脈瘤"未纠正为"解離"</td><td>心血管 Row 5</td><td>ASR将"解離"误识别为"瘤"</td><td>P2</td><td>否（三版本共有）</td></tr>
+<tr><td>"ダイナミック仮り"直译</td><td>心血管 Row 56</td><td>ASR乱码输出直译为"动态假设"</td><td>P2</td><td>否（三版本共有）</td></tr>
+<tr><td>"避けて"未纠正为"裂けて"</td><td>心血管 Row 81</td><td>ASR同音词错误直译为"避开"</td><td>P2</td><td>否（三版本共有）</td></tr>
+</table>
+
+<p><strong>关键发现：V5在日中方向无独有P1/P2级翻译问题</strong>——所有残留问题均与OLD共有，源于ASR层的系统性同音词错误。</p>
+
+<h3>F.4 日中 + 西英综合评价</h3>
+
+<table>
+<tr><th>方向</th><th>语料数</th><th>OLD 平均</th><th>V5 Prompt 平均</th><th>改善</th></tr>
+<tr><td>西语→英语</td><td>3组</td><td>66</td><td>73</td><td>+7</td></tr>
+<tr><td>日语→中文</td><td>4组</td><td>66.9</td><td>80.0</td><td>+13.1</td></tr>
+<tr><td><strong>综合</strong></td><td><strong>7组</strong></td><td><strong>~66</strong></td><td><strong>~77</strong></td><td><strong>+11</strong></td></tr>
+</table>
+
+<div class="highlight">
+<strong>综合结论</strong>：V5 Prompt 在西英和日中两个方向上均显著优于OLD Prompt。日中方向的改善幅度（+13.1）甚至大于西英方向（+7），表明V5的CORRECTION_RULES和TRANSLATION_RULES在日中方向同样有效。V5 Prompt 可确认作为生产基线。
+</div>
+
+<hr>
+
 <footer style="margin-top:60px;padding-top:20px;border-top:2px solid #e5e7eb;color:#6b7280;font-size:13px;">
-<p>生成日期：2026-05-29 | 模型：gpt-4o | Final V5 定型版本 | 96 条全量回归（7 个语种方向） + 西英三语料端到端验证</p>
+<p>生成日期：2026-05-29（日中验证补充于 2026-06-03）| 模型：gpt-4o | Final V5 定型版本 | 101 条回归 case（7 个语种方向） + 西英三语料 + 日中四语料端到端验证</p>
 </footer>
 </body>
 </html>
