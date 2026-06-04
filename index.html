@@ -688,11 +688,12 @@ li{margin:4px 0}
 <tr><td>日语→中文</td><td>4组</td><td>66.9</td><td>80.0</td><td>+13.1</td></tr>
 <tr><td>中文→英文</td><td>4组</td><td>60.4</td><td>63.3</td><td>+2.9</td></tr>
 <tr><td>韩语→中文</td><td>3组</td><td>67.8</td><td>73.0</td><td>+5.2</td></tr>
-<tr><td><strong>综合</strong></td><td><strong>14组</strong></td><td><strong>~65</strong></td><td><strong>~73</strong></td><td><strong>+8</strong></td></tr>
+<tr><td>英语→中文</td><td>3组</td><td>76.3</td><td>80.0</td><td>+3.7</td></tr>
+<tr><td><strong>综合</strong></td><td><strong>17组</strong></td><td><strong>~67</strong></td><td><strong>~74</strong></td><td><strong>+7</strong></td></tr>
 </table>
 
 <div class="highlight">
-<strong>综合结论</strong>：V5 Prompt 在四个语种方向（西英/日中/中英/韩中）共14组语料上均优于OLD Prompt，综合提升约+8分。日中方向改善最显著（+13.1），西英方向次之（+7），韩中方向（+5.2），中英方向改善温和（+2.9）。V5 Prompt 可确认作为生产基线。
+<strong>综合结论</strong>：V5 Prompt 在五个语种方向（西英/日中/中英/韩中/英中）共17组语料上均优于OLD Prompt，综合提升约+7分。日中方向改善最显著（+13.1），西英方向次之（+7），韩中（+5.2）、英中（+3.7）、中英（+2.9）。V5 Prompt 确认作为生产基线。
 </div>
 
 <hr>
@@ -776,8 +777,97 @@ li{margin:4px 0}
 
 <hr>
 
+<h2>附录I：英中方向端到端验证（2026-06-04 补充）</h2>
+
+<div class="highlight">
+<strong>验证范围</strong>：英语→中文，3 组真实语料（共约280条），覆盖：商务会议（M&A）、医学讲座（脑肿瘤/神经解剖学）、科技发布（谷歌IO大会）。<br>
+<strong>对比方式</strong>：V5 Prompt vs OLD Prompt，同一参考文本（GT）评分。<br>
+<strong>评分标准</strong>：与其他方向相同的五维度百分制（1-5分×权重→百分制）。
+</div>
+
+<h3>I.1 总分对比</h3>
+
+<table>
+<tr><th>语料</th><th>OLD</th><th>V5 Prompt</th><th>改善</th><th>趋势</th></tr>
+<tr><td>多人会议（M&A商务）</td><td>72.0</td><td><strong>77.5</strong></td><td>+5.5</td><td><span class="win">↑↑ 进步</span></td></tr>
+<tr><td>脑肿瘤与神经解剖学导论（医学）</td><td>78.0</td><td><strong>80.5</strong></td><td>+2.5</td><td><span class="win">↑ 进步</span></td></tr>
+<tr><td>谷歌IO大会（科技发布）</td><td>79.0</td><td><strong>82.0</strong></td><td>+3.0</td><td><span class="win">↑ 进步</span></td></tr>
+<tr><td><strong>平均（英中）</strong></td><td><strong>76.3</strong></td><td><strong>80.0</strong></td><td><strong>+3.7</strong></td><td><span class="win"><strong>↑ 进步</strong></span></td></tr>
+</table>
+
+<p><strong>注：</strong>英中方向OLD基线已较高（76.3），因英语ASR质量本身更优，改善空间有限。V5提升集中在断句连贯性和口语自然度。</p>
+
+<h3>I.2 V5 英中方向 亮点 Case</h3>
+
+<h4>Case EN-1：断句修复——"effective"归属正确（多人会议）</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>ASR 输入</td><td><code>So I think all roads really are.</code> + <code>Effective things have changed.</code></td><td><code>So I think all roads are really effective.</code> + <code>Things have changed.</code></td></tr>
+<tr><td>翻译输出</td><td>所以我认为所有的道路确实如此。/ <strong>有效的</strong>事情已经改变了。 <span class="fail">❌</span></td><td>所以我认为所有的道路其实都是<strong>有效的</strong>。/ 事情已经改变了。 <span class="win">✓</span></td></tr>
+<tr><td>对比说明</td><td colspan="2">OLD因ASR断句错误将"effective"接到下一句，产生"有效的事情已经改变了"这一无意义句子。V5正确还原。</td></tr>
+</table>
+
+<h4>Case EN-2：ASR纠错——"Project Astra"正确识别（谷歌IO）</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>ASR 输入</td><td><code>Gemini Live has project <strong>Asterisk's</strong> camera...</code></td><td><code>Gemini Live adds <strong>Project Astra's</strong> camera...</code></td></tr>
+<tr><td>翻译输出</td><td>Gemini Live 具有 Project <strong>Asterisk</strong> 的摄像头和屏幕共享功能。 <span class="fail">❌</span></td><td>Gemini Live 增加了 <strong>Project Astra</strong> 的摄像头和屏幕共享功能。 <span class="win">✓</span></td></tr>
+<tr><td>严重度</td><td><strong>P1</strong>（谷歌产品名完全错误）</td><td>正确</td></tr>
+</table>
+
+<h4>Case EN-3：产品发布语境——"Introducing"翻译（谷歌IO）</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>ASR 输入</td><td colspan="2"><code>Introducing Google Beam, a new AI-first video communications platform.</code></td></tr>
+<tr><td>翻译输出</td><td><strong>介绍</strong>谷歌Beam，一个全新的以AI为核心的视频通信平台。</td><td><strong>推出</strong> Google Beam，一个全新的以AI为核心的视频通信平台。 <span class="win">✓</span></td></tr>
+<tr><td>对比说明</td><td colspan="2">产品发布语境下"Introducing"应为"推出"而非"介绍"。V5更准确。</td></tr>
+</table>
+
+<h4>Case EN-4：医学逻辑——肿瘤分类关系（脑肿瘤）</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>ASR 输入</td><td colspan="2"><code>So you have neuronal tumors and glial tumors, which are categorized into astrocytomas and oligodendrogliomas.</code></td></tr>
+<tr><td>翻译输出</td><td>你有神经元肿瘤和胶质肿瘤，<strong>这些肿瘤</strong>分为星形细胞瘤和少突胶质细胞瘤。 <span class="fail">⚠️</span></td><td>你会有神经元肿瘤和胶质肿瘤，而<strong>胶质肿瘤又</strong>分为星形细胞瘤和少突胶质细胞瘤。 <span class="win">✓</span></td></tr>
+<tr><td>对比说明</td><td colspan="2">V5正确限定"胶质肿瘤又分为"，避免了OLD "这些肿瘤分为"产生的"全部肿瘤都分为两类"的歧义。医学逻辑更准确。</td></tr>
+</table>
+
+<h4>Case EN-5：口语自然度——"指出错误"（谷歌IO）</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>ASR 输入</td><td colspan="2"><code>Gemini is pretty good at telling you when you're wrong.</code></td></tr>
+<tr><td>翻译输出</td><td>双子座非常擅长<strong>告诉你什么时候你错了</strong>。</td><td>双子座很擅长<strong>指出你的错误</strong>。 <span class="win">✓</span></td></tr>
+<tr><td>对比说明</td><td colspan="2">V5的"指出你的错误"比OLD的"告诉你什么时候你错了"更符合中文表达习惯，去除翻译腔。</td></tr>
+</table>
+
+<h3>I.3 V5 英中方向 仍存在的问题</h3>
+
+<table>
+<tr><th>问题</th><th>语料</th><th>说明</th><th>严重度</th></tr>
+<tr><td>"Great"→"伟大的"</td><td>多人会议</td><td>口语附和词"Great"应译为"很好/好的"，V5机械翻译为"伟大的"</td><td>P2</td></tr>
+<tr><td>"Google Beam"→"谷歌光束"</td><td>谷歌IO</td><td>产品品牌名不应翻译，应保留原文"Google Beam"</td><td>P2</td></tr>
+<tr><td>"acquisition"→"获得"</td><td>多人会议</td><td>M&A语境下应译为"收购"而非泛化的"获得"</td><td>P2</td></tr>
+<tr><td>说话者视角混淆</td><td>多人会议 Row 84</td><td>"having had an incredible career"被理解为说话者自己而非提问对象</td><td>P2</td></tr>
+</table>
+
+<p><strong>V5英中方向无P0/P1级独有翻译错误。</strong> 所有问题均为P2级（不自然但不影响核心理解）。OLD在"acquisition"术语和"Great"口语词处理上略优。</p>
+
+<h3>I.4 英中方向结论</h3>
+
+<div class="highlight">
+<strong>V5 全面优于OLD（80.0 vs 76.3，+3.7分）</strong>。核心改善：断句连贯性提升、ASR纠错增强（Project Astra）、口语自然度更好。<br><br>
+<strong>改善幅度较小（+3.7）的原因</strong>：英语ASR质量本身较好，OLD基线已较高，改善空间有限。<br><br>
+<strong>V5残留问题均为P2级</strong>：品牌名翻译、个别口语词机械翻译、M&A术语精度。不影响整体可用性。
+</div>
+
+<hr>
+
 <footer style="margin-top:60px;padding-top:20px;border-top:2px solid #e5e7eb;color:#6b7280;font-size:13px;">
-<p>生成日期：2026-05-29（日中+中英补充于 2026-06-03，韩中补充于 2026-06-04）| 模型：gpt-4o | Final V5 定型版本 | 106 条回归 case（含韩中5条） + 西英三语料 + 日中四语料 + 中英四语料 + 韩中三语料端到端验证</p>
+<p>生成日期：2026-05-29（日中+中英补充于 2026-06-03，韩中+英中补充于 2026-06-04）| 模型：gpt-4o | Final V5 定型版本 | 106 条回归 case + 西英三语料 + 日中四语料 + 中英四语料 + 韩中三语料 + 英中三语料端到端验证（共17组）</p>
 </footer>
 </body>
 </html>
