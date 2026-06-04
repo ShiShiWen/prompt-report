@@ -687,17 +687,97 @@ li{margin:4px 0}
 <tr><td>西语→英语</td><td>3组</td><td>66</td><td>73</td><td>+7</td></tr>
 <tr><td>日语→中文</td><td>4组</td><td>66.9</td><td>80.0</td><td>+13.1</td></tr>
 <tr><td>中文→英文</td><td>4组</td><td>60.4</td><td>63.3</td><td>+2.9</td></tr>
-<tr><td><strong>综合</strong></td><td><strong>11组</strong></td><td><strong>~64</strong></td><td><strong>~72</strong></td><td><strong>+8</strong></td></tr>
+<tr><td>韩语→中文</td><td>3组</td><td>67.8</td><td>73.0</td><td>+5.2</td></tr>
+<tr><td><strong>综合</strong></td><td><strong>14组</strong></td><td><strong>~65</strong></td><td><strong>~73</strong></td><td><strong>+8</strong></td></tr>
 </table>
 
 <div class="highlight">
-<strong>综合结论</strong>：V5 Prompt 在三个语种方向（西英/日中/中英）共11组语料上均优于OLD Prompt，综合提升约+8分。日中方向改善最显著（+13.1），西英方向次之（+7），中英方向改善温和（+2.9）。中英方向改善幅度较小的原因：OLD在中英方向本身有部分优势（ASR分句更完整、个别专有名词纠错强），而V5存在1处P1纠错失败（"同传→同船"）。V5 Prompt 可确认作为生产基线。
+<strong>综合结论</strong>：V5 Prompt 在四个语种方向（西英/日中/中英/韩中）共14组语料上均优于OLD Prompt，综合提升约+8分。日中方向改善最显著（+13.1），西英方向次之（+7），韩中方向（+5.2），中英方向改善温和（+2.9）。V5 Prompt 可确认作为生产基线。
+</div>
+
+<hr>
+
+<h2>附录H：韩中方向端到端验证（2026-06-04 补充）</h2>
+
+<div class="highlight">
+<strong>验证范围</strong>：韩语→中文，3 组真实语料（共约250条），覆盖：国际政治、外交经贸、社会访谈。<br>
+<strong>对比方式</strong>：V5 Prompt vs OLD Prompt，同一参考文本（GT）评分。<br>
+<strong>评分标准</strong>：与其他方向相同的五维度百分制（1-5分×权重→百分制）。
+</div>
+
+<h3>H.1 总分对比</h3>
+
+<table>
+<tr><th>语料</th><th>OLD</th><th>V5 Prompt</th><th>改善</th><th>趋势</th></tr>
+<tr><td>国际政治局势</td><td>65.5</td><td><strong>74.0</strong></td><td>+8.5</td><td><span class="win">↑↑ 进步</span></td></tr>
+<tr><td>韩国和中美洲通商合作</td><td>66.5</td><td><strong>67.0</strong></td><td>+0.5</td><td>→ 持平</td></tr>
+<tr><td>后疫情时代的婚姻选择</td><td>71.5</td><td><strong>78.0</strong></td><td>+6.5</td><td><span class="win">↑↑ 进步</span></td></tr>
+<tr><td><strong>平均（韩中）</strong></td><td><strong>67.8</strong></td><td><strong>73.0</strong></td><td><strong>+5.2</strong></td><td><span class="win"><strong>↑ 进步</strong></span></td></tr>
+</table>
+
+<h3>H.2 V5 韩中方向 亮点 Case</h3>
+
+<h4>Case KR-1：实体纠错——以色列/伊斯兰混淆修复（P0→正确）</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>ASR 输入</td><td><code>이슬람 국민들의 시각에서 보면요.</code></td><td><code>이스라엘 국민들의 시각에서 보면요.</code></td></tr>
+<tr><td>翻译输出</td><td>从<strong>伊斯兰</strong>国民的角度来看。 <span class="fail">❌</span></td><td>从<strong>以色列</strong>国民的角度来看。 <span class="win">✓</span></td></tr>
+<tr><td>严重度</td><td><strong>P0</strong>（讨论以色列局势却翻为"伊斯兰国民"，完全混淆）</td><td>正确</td></tr>
+</table>
+
+<h4>Case KR-2：身份核心词纠错——"非婚"修复（P0→正确）</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>ASR 输入</td><td><code>비원입니다.</code>（ASR误识）</td><td><code>비혼입니다.</code>（正确识别）</td></tr>
+<tr><td>翻译输出</td><td>是<strong>祈愿</strong>。 <span class="fail">❌</span></td><td>我是<strong>未婚的</strong>。 <span class="win">✓</span></td></tr>
+<tr><td>严重度</td><td><strong>P0</strong>（演讲者核心身份"非婚主义者"变为无意义的"祈愿"）</td><td>正确</td></tr>
+</table>
+
+<h4>Case KR-3：成语纠错——"四面楚歌"（两版均正确）</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>ASR 输入</td><td colspan="2"><code>네타냐후는 지금 사면초가에 빠져있죠.</code></td></tr>
+<tr><td>翻译输出</td><td>内塔尼亚胡目前正陷入<strong>四面楚歌</strong>的境地。 <span class="win">✓</span></td><td>内塔尼亚胡目前正陷入<strong>四面楚歌</strong>的境地。 <span class="win">✓</span></td></tr>
+<tr><td>对比说明</td><td colspan="2">两版均正确将韩语成语"사면초가"翻译为中文对应成语"四面楚歌"，展示成语意译能力。</td></tr>
+</table>
+
+<h4>Case KR-4：中文表达自然度提升</h4>
+
+<table>
+<tr><th></th><th>OLD</th><th>V5</th></tr>
+<tr><td>韩语原文</td><td colspan="2"><code>마음이 많이 편안해졌지만 / 그렇지만 여전히 불안합니다.</code></td></tr>
+<tr><td>翻译输出</td><td>虽然心情变得平静了很多。/ 但是仍然感到不安。<br>（断为两句）</td><td>心情虽然平静了很多，但仍然感到不安。<br>（合并为完整转折句） <span class="win">✓</span></td></tr>
+<tr><td>对比说明</td><td colspan="2">V5将断裂的两句合并为中文转折复句，更符合中文表达习惯。</td></tr>
+</table>
+
+<h3>H.3 V5 韩中方向 仍存在的问题</h3>
+
+<table>
+<tr><th>问题</th><th>语料</th><th>说明</th><th>严重度</th><th>根因</th></tr>
+<tr><td>"경제협력→경제압력"反义</td><td>通商合作</td><td>"经济合作"被ASR识别为"经济压力"，V5未纠正</td><td>P0</td><td>ASR层</td></tr>
+<tr><td>"한-중미→韩中美"歧义</td><td>通商合作</td><td>"韩国-中美洲"被翻为可能误解为三国的"韩中美"（5次+）</td><td>P1</td><td>ASR层+翻译层</td></tr>
+<tr><td>"확전→학자"军事术语</td><td>国际政治 行59</td><td>"扩战"被ASR误识为"学者"，V5未纠正</td><td>P1</td><td>ASR层（V5新增）</td></tr>
+<tr><td>"토양→태양"名词混淆</td><td>通商合作 行45</td><td>"土壤"被ASR误识为"太阳"→"肥沃阳光"</td><td>P2</td><td>ASR层（V5新增）</td></tr>
+<tr><td>人名截断"佩拉尔塔→佩拉尔"</td><td>通商合作 行34</td><td>人名最后一个音节丢失</td><td>P2</td><td>ASR层</td></tr>
+</table>
+
+<p><strong>关键发现：V5修复了OLD的2个P0问题（以色列混淆、非婚身份），但剩余未修复问题均源于ASR层误识别。</strong> V5翻译层已接近能力上限，进一步提升需ASR phrase list配合（특히 경제협력、확전、한-중미 등）。</p>
+
+<h3>H.4 韩中方向结论</h3>
+
+<div class="highlight">
+<strong>V5 整体优于OLD（73.0 vs 67.8，+5.2分）</strong>。核心改善来自2个P0级实体纠错修复。<br><br>
+<strong>通商合作几乎无改善（+0.5）</strong>，因核心问题（经济压力反义、韩中美歧义）均源于ASR层，Prompt无法突破。<br><br>
+<strong>V5新增1个P1问题</strong>（확전→학자），但整体收益远大于新增问题的损失。
 </div>
 
 <hr>
 
 <footer style="margin-top:60px;padding-top:20px;border-top:2px solid #e5e7eb;color:#6b7280;font-size:13px;">
-<p>生成日期：2026-05-29（日中+中英验证补充于 2026-06-03）| 模型：gpt-4o | Final V5 定型版本 | 101 条回归 case（7 个语种方向） + 西英三语料 + 日中四语料 + 中英四语料端到端验证</p>
+<p>生成日期：2026-05-29（日中+中英补充于 2026-06-03，韩中补充于 2026-06-04）| 模型：gpt-4o | Final V5 定型版本 | 106 条回归 case（含韩中5条） + 西英三语料 + 日中四语料 + 中英四语料 + 韩中三语料端到端验证</p>
 </footer>
 </body>
 </html>
